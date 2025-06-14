@@ -15,7 +15,7 @@
 
 1. 克隆仓库：
 ```bash
-git clone https://github.com/yourusername/subscription-bot.git
+git clone https://github.com/beggerlove/subscription_bot.git
 cd subscription-bot
 ```
 
