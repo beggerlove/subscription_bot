@@ -166,11 +166,19 @@ async def send_message(context: ContextTypes.DEFAULT_TYPE, text: str, chat_id: i
     if chat_id is None:
         chat_id = CHAT_ID
     try:
-        message = await context.bot.send_message(chat_id=chat_id, text=text)
+        message = await context.bot.send_message(
+            chat_id=chat_id, 
+            text=text,
+            parse_mode='HTML'  # 使用 HTML 格式
+        )
         # 启动异步任务删除消息
         asyncio.create_task(delete_message_after_delay(context, chat_id, message.message_id))
     except Exception as e:
         logging.error(f"发送消息失败: {str(e)}")
+
+def escape_html(text: str) -> str:
+    """转义 HTML 特殊字符"""
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /start 命令"""
@@ -245,20 +253,37 @@ async def list_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = "当前订阅列表：\n\n"
     for sub in subscriptions:
-        text += f"名称：{sub['name']}\n"
-        text += f"URL：{sub['url']}\n"
+        text += f"名称：{escape_html(sub['name'])}\n"
+        # 使用 HTML 剧透标签
+        text += f"URL：<tg-spoiler>{escape_html(sub['url'])}</tg-spoiler>\n"
         if sub.get("custom_message"):
-            text += f"备注：{sub['custom_message']}\n"
+            text += f"备注：{escape_html(sub['custom_message'])}\n"
         text += "-------------------\n"
     
     await send_message(context, text, update.effective_chat.id)
 
 async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /check 命令"""
-    await send_message(context, "开始检查所有订阅...", update.effective_chat.id)
+    # 发送初始消息并保存消息ID
+    message = await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="开始检查所有订阅..."
+    )
+    message_id = message.message_id
+
+    # 检查所有订阅
     results = subscription_manager.check_all_subscriptions()
     msg = subscription_manager.format_status_message(results)
-    await send_message(context, msg, update.effective_chat.id)
+
+    # 更新消息内容
+    await context.bot.edit_message_text(
+        chat_id=update.effective_chat.id,
+        message_id=message_id,
+        text=msg
+    )
+
+    # 60秒后删除消息
+    asyncio.create_task(delete_message_after_delay(context, update.effective_chat.id, message_id))
 
 async def message_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /message 命令"""
