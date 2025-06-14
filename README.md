@@ -72,7 +72,3 @@ python subscription_bot.py
 1. 请勿将包含 TOKEN 的配置文件提交到代码仓库
 2. 建议将 `config.json` 添加到 `.gitignore` 文件中
 3. 确保订阅链接支持 `subscription-userinfo` 头部信息
-
-## 许可证
-
-MIT License 
