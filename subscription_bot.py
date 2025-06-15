@@ -79,6 +79,23 @@ class SubscriptionManager:
         self.save_subscriptions()
         return True
 
+    def edit_subscription(self, old_name: str, new_name: str = None, new_url: str = None, new_message: str = None) -> bool:
+        """修改订阅信息"""
+        for sub in self.subscriptions:
+            if sub['name'] == old_name:
+                if new_name is not None:
+                    # 检查新名称是否与其他订阅重复
+                    if new_name != old_name and any(s['name'] == new_name for s in self.subscriptions):
+                        return False
+                    sub['name'] = new_name
+                if new_url is not None:
+                    sub['url'] = new_url
+                if new_message is not None:
+                    sub['custom_message'] = new_message
+                self.save_subscriptions()
+                return True
+        return False
+
     def remove_subscription(self, name: str) -> bool:
         initial_length = len(self.subscriptions)
         self.subscriptions = [sub for sub in self.subscriptions if sub['name'] != name]
@@ -468,25 +485,35 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "2. 删除订阅：\n"
             "   /remove 名称\n"
             "   例如：/remove 机场1\n\n"
-            "3. 查看所有订阅：\n"
+            "3. 修改订阅：\n"
+            "   /edit 原名称 参数 新值\n"
+            "   参数：\n"
+            "   -name: 修改名称\n"
+            "   -url: 修改链接\n"
+            "   -message: 修改备注\n"
+            "   例如：\n"
+            "   /edit 机场1 -name 新机场名\n"
+            "   /edit 机场1 -url https://new.url\n"
+            "   /edit 机场1 -message 新备注\n\n"
+            "4. 查看所有订阅：\n"
             "   /list\n\n"
-            "4. 检查订阅状态：\n"
+            "5. 检查订阅状态：\n"
             "   /check\n\n"
-            "5. 更新订阅备注：\n"
+            "6. 更新订阅备注：\n"
             "   /message 名称 新备注\n"
             "   例如：/message 机场1 这是新备注\n\n"
-            "6. 设置检查时间：\n"
+            "7. 设置检查时间：\n"
             "   /setchecktime 小时\n"
             "   例如：/setchecktime 9\n\n"
-            "7. 添加群组：\n"
+            "8. 添加群组：\n"
             "   /addgroup\n"
             "   在群组中使用此命令将当前群组添加到机器人\n\n"
-            "8. 移除群组：\n"
+            "9. 移除群组：\n"
             "   /removegroup\n"
             "   在群组中使用此命令将当前群组从机器人中移除\n\n"
-            "9. 查看群组列表：\n"
-            "   /listgroups\n"
-            "   显示所有已添加的群组\n\n"
+            "10. 查看群组列表：\n"
+            "    /listgroups\n"
+            "    显示所有已添加的群组\n\n"
             "所有用户可用命令：\n"
             "1. 检查订阅链接：\n"
             "   /sub &lt;链接&gt;\n"
@@ -879,6 +906,68 @@ async def list_groups_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await send_message(context, text, update.effective_chat.id)
 
+async def edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /edit 命令"""
+    if not await group_permission_required(update, context):
+        return
+    if not await admin_required(update, context):
+        return
+
+    if len(context.args) < 2:
+        help_text = (
+            "请提供正确的参数，格式：\n"
+            "/edit &lt;原名称&gt; &lt;参数&gt; &lt;新值&gt;\n\n"
+            "可用参数：\n"
+            "-name: 修改名称\n"
+            "-url: 修改链接\n"
+            "-message: 修改备注\n\n"
+            "示例：\n"
+            "/edit 机场1 -name 新机场名\n"
+            "/edit 机场1 -url https://new.url\n"
+            "/edit 机场1 -message 新备注"
+        )
+        await send_message(context, help_text, update.effective_chat.id)
+        return
+
+    old_name = context.args[0]
+    param = context.args[1].lower()
+    new_value = " ".join(context.args[2:]) if len(context.args) > 2 else None
+
+    if new_value is None:
+        await send_message(context, "请提供新的值", update.effective_chat.id)
+        return
+
+    # 根据参数类型设置相应的值
+    new_name = new_value if param == "-name" else None
+    new_url = new_value if param == "-url" else None
+    new_message = new_value if param == "-message" else None
+
+    if not any([new_name, new_url, new_message]):
+        help_text = (
+            "无效的参数，可用参数：\n"
+            "-name: 修改名称\n"
+            "-url: 修改链接\n"
+            "-message: 修改备注"
+        )
+        await send_message(context, help_text, update.effective_chat.id)
+        return
+
+    if subscription_manager.edit_subscription(old_name, new_name, new_url, new_message):
+        # 构建成功消息
+        success_msg = f"订阅 {escape_html(old_name)} 已更新：\n"
+        if new_name:
+            success_msg += f"新名称：{escape_html(new_name)}\n"
+        if new_url:
+            success_msg += f"新链接：<tg-spoiler>{escape_html(new_url)}</tg-spoiler>\n"
+        if new_message:
+            success_msg += f"新备注：{escape_html(new_message)}"
+        await send_message(context, success_msg, update.effective_chat.id)
+    else:
+        if new_name and any(sub['name'] == new_name for sub in subscription_manager.subscriptions):
+            await send_message(context, f"订阅名称 {escape_html(new_name)} 已存在！", update.effective_chat.id)
+        else:
+            await send_message(context, f"订阅 {escape_html(old_name)} 不存在！", update.effective_chat.id)
+
 def check_and_install_requirements():
     """检查并安装必要的依赖"""
     requirements = {
@@ -996,6 +1085,22 @@ def StrOfSize(size):
     return ('{}.{:>03d} {}'.format(integer, remainder, units[level]))
 
 # ------------------ 主函数 ------------------
+async def send_startup_notification(context: ContextTypes.DEFAULT_TYPE):
+    """发送机器人启动通知"""
+    if CHAT_IDS:
+        for chat_id in CHAT_IDS:
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="🤖 订阅管理机器人已启动\n\n"
+                         "📝 可用命令：\n"
+                         "/help - 查看帮助信息\n"
+                         "/sub - 检查订阅链接\n"
+                         "/check - 检查所有订阅状态"
+                )
+            except Exception as e:
+                logging.error(f"发送启动通知到群组 {chat_id} 失败: {str(e)}")
+
 def main():
     try:
         application = Application.builder().token(BOT_TOKEN).build()
@@ -1011,6 +1116,7 @@ def main():
         application.add_handler(CommandHandler("message", message_command))
         application.add_handler(CommandHandler("setchecktime", set_check_time_command))
         application.add_handler(CommandHandler("sub", sub_command))
+        application.add_handler(CommandHandler("edit", edit_command))  # 添加编辑命令处理器
         # 添加群组管理命令
         application.add_handler(CommandHandler("addgroup", add_group_command))
         application.add_handler(CommandHandler("removegroup", remove_group_command))
@@ -1022,6 +1128,9 @@ def main():
             time=dtime(hour=config.get("check_hour", 9), tzinfo=TIMEZONE),
             name="daily_check"
         )
+
+        # 添加启动通知
+        application.post_init = send_startup_notification
 
         logging.info("机器人已启动")
         application.run_polling()
