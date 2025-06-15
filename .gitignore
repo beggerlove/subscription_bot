@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -24,6 +23,7 @@ wheels/
 # Virtual Environment
 venv/
 ENV/
+env/
 
 # IDE
 .idea/
@@ -34,10 +34,10 @@ ENV/
 # Logs
 *.log
 
-# Config files
+# Configuration
 config.json
 subscriptions.json
 
-# OS
+# System
 .DS_Store
 Thumbs.db 
